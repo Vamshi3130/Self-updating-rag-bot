@@ -8,22 +8,16 @@ services:
       - chromadb
     env_file:
       - .env
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
     networks:
       - rag-network
     volumes:
       - ./indexer/app:/app/app
-    ports:
-      - "8001:8001"
     restart: unless-stopped
 
   CoBot:
     build: ./CoBot
     depends_on:
-      - indexer  # Ensure indexer starts before botapp
+      - indexer
     env_file:
       - .env
     networks:
