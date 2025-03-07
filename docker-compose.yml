@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  indexer:
+    build: ./indexer
+    depends_on:
+      - mongodb
+      - chromadb
+    env_file:
+      - .env
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    networks:
+      - rag-network
+    volumes:
+      - ./indexer/app:/app/app
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  CoBot:
+    build: ./CoBot
+    depends_on:
+      - indexer  # Ensure indexer starts before botapp
+    env_file:
+      - .env
+    networks:
+      - rag-network
+    volumes:
+      - ./botapp/app:/app/app
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:6
+    container_name: mongodb
+    command: ["mongod", "--replSet", "my-replica-set", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'rs.status().ok' | mongosh --quiet --port 27017 | grep 1"]
+      interval: 10s
+      start_period: 30s
+      timeout: 5s
+      retries: 3
+
+  init-mongo:
+    image: mongo:6
+    depends_on:
+      - mongodb
+    entrypoint: ["sh", "-c", "sleep 5 && mongosh --host mongodb --port 27017 --eval 'rs.initiate({_id: \"my-replica-set\", members: [{ _id: 0, host: \"mongodb:27017\" }]})'"]
+    networks:
+      - rag-network
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8002:8000"
+    volumes:
+      - chromadb_data:/chroma/data
+    networks:
+      - rag-network
+
+networks:
+  rag-network:
+    driver: bridge
+    name: rag-network
+
+volumes:
+  mongodb_data:
+  chromadb_data:
